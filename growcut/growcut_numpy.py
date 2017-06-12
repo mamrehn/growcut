@@ -14,7 +14,7 @@ def G(x, y):
     return 1 - np.sqrt((x - y) ** 2) / sqrt(3)
 
 
-def growcut(image, state, max_iter=100, window_size=5):
+def growcut(image, state, max_iter=100, window_size=5, tol=2**-15):
     """Grow-cut segmentation.
 
     Parameters
@@ -31,6 +31,8 @@ def growcut(image, state, max_iter=100, window_size=5):
         may complete earlier if the state no longer varies.
     window_size : int
         Size of the neighborhood window.
+    tol : float
+        Tolerance for the difference in strength of conquering cells
 
     Returns
     -------
@@ -71,11 +73,12 @@ def growcut(image, state, max_iter=100, window_size=5):
             gc = G(C_q, C_p)
 
             # Compute the strength mask
-            mask = (gc * S_q_strength) > S_p[1]
+            mask = gc * S_q_strength
 
-            if np.any(mask):
-                state_next[0, i, j] = (S_q_label[mask])[0]
-                state_next[1, i, j] = (gc * S_q_strength)[mask][0]
+            if np.any(mask > S_p[1] + tol):
+                strongest_neighbor_idx = np.argmax(mask)
+                state_next[0, i, j] = S_q_label[strongest_neighbor_idx]
+                state_next[1, i, j] = mask[strongest_neighbor_idx]
                 changing += 1
 
         state = state_next
