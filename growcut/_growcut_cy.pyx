@@ -16,6 +16,11 @@ cdef extern from "math.h" nogil:
     double sqrt(double)
 
 
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+@cython.initializedcheck(False)
 cdef inline double distance(double[:, :, ::1] image,
                             Py_ssize_t r0, Py_ssize_t c0,
                             Py_ssize_t r1, Py_ssize_t c1) nogil:
@@ -37,8 +42,12 @@ cdef inline double g(double d) nogil:
     return 1 - (d / s3) * (d / s3)
 
 
-def growcut(image, state,
-            int max_iter=500, int window_size=5):
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+@cython.initializedcheck(False)
+cpdef growcut(image, state, int max_iter=500, int window_size=5):
     """Grow-cut segmentation.
 
     Parameters
@@ -67,7 +76,7 @@ def growcut(image, state,
 
         Py_ssize_t i, j, ii, jj, width, height, ws, n, changes, changes_per_cell
         double[:] C_p, S_p, C_q, S_q
-        double gc, attack_strength
+        double gc, attack_strength, ws
 
     image_arr = np.ascontiguousarray(img_as_float(image))
     state_arr = state
@@ -76,7 +85,6 @@ def growcut(image, state,
     ws = (window_size - 1) // 2
 
     changes = 1
-    changes_per_cell = 0
     n = 0
 
     state_next_arr = state_arr.copy()
@@ -85,34 +93,26 @@ def growcut(image, state,
         changes = 0
         n += 1
 
-        if n % 10 == 0:
-            print n
-
+        if n % 20 == 0:
+            print(n)
 
         for j in range(width):
             for i in range(height):
-                changes_per_cell = 0
-
                 for jj in xrange(max(0, j - ws), min(j + ws + 1, width)):
                     for ii in xrange(max(0, i - ws), min(i + ws + 1, height)):
-                        if ii == i and jj == j or changes_per_cell > 0:
+                        if ii == i and jj == j:
                             continue
 
                         # p -> current cell, (i, j)
                         # q -> attacker, (ii, jj)
 
                         gc = g(distance(image_arr, i, j, ii, jj))
-
                         attack_strength = gc * state_arr[ii, jj, 1]
 
                         if attack_strength > state_arr[i, j, 1]:
                             state_next_arr[i, j, 1] = attack_strength
-
-                            if state_arr[i, j, 0] != state_arr[ii, jj, 0]:
-                                state_next_arr[i, j, 0] = state_arr[ii, jj, 0]
-
-                                changes += 1
-                                changes_per_cell += 1
+                            state_next_arr[i, j, 0] = state_arr[ii, jj, 0]
+                            changes = 1
 
         state_arr[:] = state_next_arr[:]
 
